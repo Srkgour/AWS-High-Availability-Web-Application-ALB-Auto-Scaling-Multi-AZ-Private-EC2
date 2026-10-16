@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS HA Web App - Project #5 (with Target Group)</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f7fb;--card:#fff;--tx:#14213d;--mut:#5b667a;--bd:#d5dae5;--ok:#1f9d55;--bad:#d64545;--acc:#ff9900;--req:#2f6fed;--res:#14a37f;--az:#eef2fb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1420;--card:#172033;--tx:#e8edf7;--mut:#9aa7bd;--bd:#2b3752;--az:#121a2b}}
+:root[data-theme="dark"]{--bg:#0e1420;--card:#172033;--tx:#e8edf7;--mut:#9aa7bd;--bd:#2b3752;--az:#121a2b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;max-width:960px;margin-inline:auto}
+h1{font-size:1.25rem;margin:0 0 4px}
+h2{font-size:.9rem;margin:14px 0 6px}
+.sub{color:var(--mut);font-size:.85rem;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--tx);font-size:12px;font-family:inherit}
+.box{fill:var(--card);stroke:var(--bd);stroke-width:1.5}
+.az{fill:var(--az);stroke:var(--bd);stroke-dasharray:5 4}
+.line{stroke:var(--bd);stroke-width:2;fill:none;transition:stroke .4s}
+.line.hot{stroke:var(--acc)}
+.mut{fill:var(--mut)!important;font-size:10.5px}
+.fade{opacity:0;transition:opacity .6s}.fade.on{opacity:1}
+.down .box{stroke:var(--bad);fill:color-mix(in srgb,var(--bad) 15%,var(--card))}
+.st{font-size:10px!important;fill:var(--mut)!important}
+.st.ok{fill:var(--ok)!important;font-weight:700}.st.bad{fill:var(--bad)!important;font-weight:700}.st.wait{fill:var(--acc)!important}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+button{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:8px 14px;font-size:.85rem;cursor:pointer}
+button:hover{border-color:var(--acc)}
+#cap{font-weight:600;font-size:.95rem;margin:4px 0;min-height:1.4em}
+#stat{color:var(--mut);font-size:.82rem;min-height:1.2em}
+ol{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+li{border:1px solid var(--bd);background:var(--card);border-radius:8px;padding:8px;font-size:.76rem;color:var(--mut);transition:all .25s}
+li b{display:block;color:var(--tx);font-size:.8rem}
+li.on{border-color:var(--acc);color:var(--tx);transform:translateY(-2px)}
+pre{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:.75rem;overflow-x:auto;margin:12px 0 0}
+</style>
+</head>
+<body>
+<h1>AWS High Availability Web App</h1>
+<p class="sub">ALB + Target Group + Auto Scaling + Multi-AZ + Private EC2 (Nginx &rarr; Tomcat)</p>
+<div class="card">
+<svg viewBox="0 0 900 470" role="img" aria-label="Animated architecture with target group">
+ <rect class="az" x="455" y="30" width="435" height="190" rx="10"/><text x="467" y="48" class="mut">AZ-1 &middot; Private subnet</text>
+ <rect class="az" x="455" y="250" width="435" height="190" rx="10"/><text x="467" y="268" class="mut">AZ-2 &middot; Private subnet</text>
+ <path class="line" d="M95 235H120M190 235H215M610 125H690M610 345H690"/>
+ <path id="l1" class="line" d="M305 235H335"/>
+ <path id="l2" class="line" d="M385 235V145M385 235V325M420 125H510M420 345H510"/>
+ <g class="fade" id="asg"><rect x="462" y="58" width="421" height="354" rx="10" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-dasharray="3 4"/>
+  <text x="472" y="426" style="fill:var(--acc);font-size:11px">Auto Scaling Group (min 2 / desired 2 / max 4), attached to the Target Group</text>
+  <path d="M435 235H462" stroke="var(--acc)" stroke-width="2" stroke-dasharray="4 3" fill="none"/><text x="448" y="228" text-anchor="middle" style="fill:var(--acc);font-size:9px">attach</text></g>
+ <g><rect class="box" x="15" y="212" width="80" height="46" rx="8"/><text x="55" y="239" text-anchor="middle">Internet</text></g>
+ <g><rect class="box" x="120" y="212" width="70" height="46" rx="8"/><text x="155" y="239" text-anchor="middle">IGW</text></g>
+ <g><rect class="box" x="215" y="200" width="90" height="70" rx="8" style="stroke:var(--acc);stroke-width:2"/><text x="260" y="226" text-anchor="middle">ALB</text><text x="260" y="242" text-anchor="middle" class="mut">Listener :80</text><text x="260" y="256" text-anchor="middle" class="mut">public subnets</text></g>
+ <g class="fade" id="tg"><rect x="335" y="85" width="100" height="300" rx="10" fill="var(--card)" stroke="var(--req)" stroke-width="2"/>
+  <text x="385" y="76" text-anchor="middle" style="fill:var(--req);font-weight:700">Target Group</text>
+  <text x="385" y="236" text-anchor="middle" class="mut" style="display:none"></text>
+  <text x="385" y="102" text-anchor="middle" class="mut" style="font-size:9px">tg-web &middot; HTTP:80 &middot; /</text></g>
+ <g id="n0"><g class="fade" id="p0"><rect class="box" x="350" y="108" width="70" height="40" rx="6"/><text x="385" y="123" text-anchor="middle" class="mut">EC2 #1</text><text id="t0" x="385" y="139" text-anchor="middle" class="st wait">registering</text></g></g>
+ <g id="n1"><g class="fade" id="p1"><rect class="box" x="350" y="322" width="70" height="40" rx="6"/><text x="385" y="337" text-anchor="middle" class="mut">EC2 #2</text><text id="t1" x="385" y="353" text-anchor="middle" class="st wait">registering</text></g></g>
+ <g id="e0"><rect class="box" x="475" y="72" width="400" height="106" rx="8"/><text x="485" y="90" class="mut">EC2 #1 (private, no public IP)</text>
+  <rect class="box" x="510" y="105" width="100" height="40" rx="6"/><text x="560" y="129" text-anchor="middle">Nginx :80</text>
+  <rect class="box" x="690" y="105" width="100" height="40" rx="6"/><text x="740" y="129" text-anchor="middle">Tomcat :8080</text><text x="650" y="120" text-anchor="middle" class="mut" style="font-size:9px">proxy_pass</text></g>
+ <g id="e1"><rect class="box" x="475" y="292" width="400" height="106" rx="8"/><text x="485" y="310" class="mut">EC2 #2 (private, no public IP)</text>
+  <rect class="box" x="510" y="325" width="100" height="40" rx="6"/><text x="560" y="349" text-anchor="middle">Nginx :80</text>
+  <rect class="box" x="690" y="325" width="100" height="40" rx="6"/><text x="740" y="349" text-anchor="middle">Tomcat :8080</text><text x="650" y="340" text-anchor="middle" class="mut" style="font-size:9px">proxy_pass</text></g>
+ <circle id="dot" r="8" cx="55" cy="235" fill="var(--req)" opacity="0"/>
+</svg>
+</div>
+<div class="ctl"><button id="pp">Pause</button><button id="rst">Replay setup</button><button id="kill">Kill EC2 in AZ-1</button></div>
+<div id="cap">Starting...</div><div id="stat">&nbsp;</div>
+<h2>A. Setup: attach the Target Group to the load balancer</h2>
+<ol id="setup"></ol>
+<h2>B. Live traffic flow</h2>
+<ol id="steps"></ol>
+<pre>server {
+  listen 80 default_server;
+  server_name _;
+  location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}</pre>
+<script>
+var SU=[["1 Create Target Group","Type: Instances, HTTP:80, health check path /"],["2 Attach ASG","ASG registers its EC2s into the Target Group"],["3 Listener rule","ALB listener :80 forwards to the Target Group"],["4 Health checks","Targets turn healthy, ready for traffic"]];
+var S=[["1 Request","User hits the ALB DNS name"],["2 Internet Gateway","Entry point into the VPC"],["3 ALB listener","Receives on :80"],["4 Target Group","Picks a healthy target"],["5 Nginx :80","Reverse proxy on private EC2"],["6 Tomcat :8080","App serves the page"],["7 Response","Same path back to the user"]];
+function fill(id,a){var o=document.getElementById(id);a.forEach(function(s){var l=document.createElement('li');l.innerHTML='<b>'+s[0]+'</b>'+s[1];o.appendChild(l)});return o.children}
+var sl=fill('setup',SU),lis=fill('steps',S);
+var $=function(i){return document.getElementById(i)},dot=$('dot'),cap=$('cap'),stat=$('stat');
+var up=[true,true],next=0,paused=false,wp=[],i=0,x=55,y=235,wait=0,last=0,mode='setup',nxt=0,timers=[];
+function mark(list,k){for(var j=0;j<list.length;j++)list[j].className=j==k?'on':''}
+function pill(k,t,c){var e=$('t'+k);e.textContent=t;e.setAttribute('class','st '+c)}
+function runSetup(){timers.forEach(clearTimeout);timers=[];mode='setup';wp=[];dot.setAttribute('opacity',0);
+ ['tg','asg','p0','p1'].forEach(function(n){$(n).setAttribute('class','fade')});
+ ['l1','l2'].forEach(function(n){$(n).setAttribute('class','line')});
+ up=[true,true];$('e0').removeAttribute('class');$('n0').removeAttribute('class');pill(0,'registering','wait');pill(1,'registering','wait');mark(lis,-1);stat.textContent='';
+ var at=function(ms,f){timers.push(setTimeout(function(){if(!paused||true)f()},ms))};
+ cap.textContent='Setup: build the Target Group first';
+ at(300,function(){mark(sl,0);cap.textContent='Create Target Group tg-web: protocol HTTP, port 80, health check path /';$('tg').setAttribute('class','fade on')});
+ at(2600,function(){mark(sl,1);cap.textContent='Attach the Auto Scaling Group to the Target Group, so new instances auto-register';$('asg').setAttribute('class','fade on');$('p0').setAttribute('class','fade on');$('p1').setAttribute('class','fade on')});
+ at(5000,function(){mark(sl,2);cap.textContent='ALB listener :80, default action: forward to tg-web';$('l1').setAttribute('class','line hot');$('l2').setAttribute('class','line hot')});
+ at(7400,function(){mark(sl,3);cap.textContent='Health checks pass: both targets are healthy';pill(0,'healthy','ok');pill(1,'healthy','ok')});
+ at(9800,function(){mark(sl,-1);$('l1').setAttribute('class','line');$('l2').setAttribute('class','line');dot.setAttribute('opacity',1);mode='traffic';nxt=0})}
+function route(t){var Y=t?345:125,n=t+1;return[[55,235,0,'User browser sends a request to the ALB'],[155,235,1,'Internet Gateway lets traffic into the VPC'],[260,235,2,'ALB listener :80 receives it and forwards to the Target Group'],[335,235,3,'Target Group tg-web: only healthy targets are eligible'],[385,235,3],[385,Y,3,'Target in AZ-'+n+' is healthy: selected'],[560,Y,4,'Nginx on port 80 receives it'],[740,Y,5,'proxy_pass sends it to Tomcat on 127.0.0.1:8080'],[560,Y,5,'Tomcat replies back through Nginx'],[385,Y,6],[385,235,6],[260,235,6,'ALB returns the response'],[155,235,6],[55,235,6,'User sees: Nginx Reverse Proxy is Working!']]}
+function start(){var c=[];if(up[0])c.push(0);if(up[1])c.push(1);if(!c.length){cap.textContent='No healthy targets';nxt=performance.now()+1000;return}
+ wp=route(c[next++%c.length]);i=0;x=55;y=235;wait=500;show(wp[0])}
+function show(w){if(w[3])cap.textContent=w[3];mark(lis,w[2])}
+function frame(t){var dt=Math.min(50,t-last)/1000;last=t;
+ if(!paused&&mode=='traffic'){
+  if(!wp.length){if(t>nxt)start()}
+  else if(wait>0){wait-=dt*1000}
+  else if(i<wp.length-1){var a=wp[i+1],dx=a[0]-x,dy=a[1]-y,d=Math.hypot(dx,dy),s=170*dt;
+   dot.setAttribute('fill',i>=7?'var(--res)':'var(--req)');
+   if(d<=s){x=a[0];y=a[1];i++;show(a);if(i==7)wait=500}else{x+=dx/d*s;y+=dy/d*s}
+   dot.setAttribute('cx',x);dot.setAttribute('cy',y)}
+  else{wp=[];nxt=t+700}}
+ requestAnimationFrame(frame)}
+$('pp').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+$('rst').onclick=runSetup;
+$('kill').onclick=function(){if(mode!='traffic'||!up[0])return;up[0]=false;$('e0').setAttribute('class','down');pill(0,'unhealthy','bad');
+ stat.textContent='Health check failed: Target Group marks AZ-1 unhealthy, all traffic goes to AZ-2';
+ timers.push(setTimeout(function(){stat.textContent='Auto Scaling launches a replacement and registers it in the Target Group...';pill(0,'registering','wait');$('e0').removeAttribute('class')},3500));
+ timers.push(setTimeout(function(){up[0]=true;pill(0,'healthy','ok');stat.textContent='Replacement is healthy: both AZs serving again'},8000))};
+runSetup();requestAnimationFrame(frame);
+</script>
+</body>
+</html>
